@@ -25,7 +25,7 @@ SRC_TABLES = {
     # 'substr': { 'id': 'syn63096834', 'name': 'DataSubstrate', }
 }
 DEST_TABLES = {
-    'DST_denormalized_2': {
+    'DST_denormalized': {
         'dest_table_name': 'DST_denormalized',
         'base_table': 'dst',
         'columns': [
@@ -120,14 +120,20 @@ def make_dest_table(syn, dest_table, src_tables):
                     join_columns.append(column_def)
 
     # Combine all columns (base + join) and create the destination table
-    all_cols = [Column(**col['col']) for col in dest_cols + join_columns if 'col' in col]
     all_data = {col['alias']: col['data'] for col in dest_cols + join_columns if 'data' in col}
     all_data = pd.DataFrame(all_data)
 
     # Create the table schema
-    for col in all_cols:
+    all_dest_cols = [col for col in dest_cols + join_columns]
+    for dest_col in all_dest_cols:
+        col = dest_col['col']
         # Remove the column id so new column gets created
         col.pop('id', None)
+
+        # faceted = dest_col.get('faceted', False)
+        # if faceted:
+        #     col['facetType'] = 'enumeration'
+
         if col['columnType'] == 'STRING_LIST':
             # Get the maximum number of items in the series of lists
             max_items = max(len(items) for items in all_data[col['name']])
@@ -137,6 +143,8 @@ def make_dest_table(syn, dest_table, src_tables):
             col['maximumSize'] = max_item_length + 10
             # The rationale for this is because if max size is set to 50 and max list length is 25, that is 50*25 bytes.
             # even if you don't store that much data.
+
+    all_cols = [Column(**col['col']) for col in all_dest_cols]
     schema = Schema(name=dest_table['dest_table_name'], columns=all_cols, parent=PROJECT_ID)
 
     # Check if table already exists and delete if it does
@@ -154,6 +162,7 @@ def make_dest_table(syn, dest_table, src_tables):
     # Create the table
     table = syn.store(Table(schema, all_data))
     print(f"Created table: {table.schema.name} ({table.tableId})")
+
 
 def create_list_column(base_df, join_df, from_col, to_col, join_config, dest_col):
     """
