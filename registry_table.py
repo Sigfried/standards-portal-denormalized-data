@@ -40,12 +40,12 @@ DEST_TABLES = {
             {'faceted': True,  'name': 'is_open',                   'alias': 'Is_Open'},
             {'faceted': True,  'name': 'requires_registration',     'alias': 'Registration'},
             {'faceted': False, 'name': 'url',                       'alias': 'URL'},
-            # {'faceted': False, 'name': 'formal_specification',      'alias': 'Formal_Spec'},
-            # {'faceted': False, 'name': 'publication',               'alias': 'Publication'},
-            # {'faceted': False, 'name': 'has_training_resource',     'alias': 'Training_Resources'},
-            # {'faceted': False, 'name': 'subclass_of',               'alias': 'Subclass_Of'},
-            # {'faceted': False, 'name': 'contribution_date',         'alias': 'Contribution_Date'},
-            # {'faceted': False, 'name': 'related_to',                'alias': 'Related_To'},
+            {'faceted': False, 'name': 'formal_specification',      'alias': 'Formal_Spec'},
+            {'faceted': False, 'name': 'publication',               'alias': 'Publication'},
+            {'faceted': False, 'name': 'has_training_resource',     'alias': 'Training_Resources'},
+            {'faceted': False, 'name': 'subclass_of',               'alias': 'Subclass_Of'},
+            {'faceted': False, 'name': 'contribution_date',         'alias': 'Contribution_Date'},
+            {'faceted': False, 'name': 'related_to',                'alias': 'Related_To'},
         ],
         # 'special_processing': dst_description_trim,
         'join_columns': [
@@ -118,6 +118,7 @@ def make_dest_table(syn, dest_table, src_tables):
                 column_def = create_list_column(base_df, join_df, from_col, to_col, join_config, dest_col)
                 if column_def:
                     join_columns.append(column_def)
+            column_def['faceted'] = faceted
 
     # Combine all columns (base + join) and create the destination table
     all_data = {col['alias']: col['data'] for col in dest_cols + join_columns if 'data' in col}
@@ -130,9 +131,9 @@ def make_dest_table(syn, dest_table, src_tables):
         # Remove the column id so new column gets created
         col.pop('id', None)
 
-        # faceted = dest_col.get('faceted', False)
-        # if faceted:
-        #     col['facetType'] = 'enumeration'
+        faceted = dest_col.get('faceted', False)
+        if faceted:
+            col['facetType'] = 'enumeration'
 
         if col['columnType'] == 'STRING_LIST':
             # Get the maximum number of items in the series of lists
@@ -147,19 +148,21 @@ def make_dest_table(syn, dest_table, src_tables):
     all_cols = [Column(**col['col']) for col in all_dest_cols]
     schema = Schema(name=dest_table['dest_table_name'], columns=all_cols, parent=PROJECT_ID)
 
-    # Check if table already exists and delete if it does
-    #       I don't seem to have permission
-    # try:
-    #     existing_tables = syn.getChildren(PROJECT_ID, includeTypes=['table'])
-    #     for table in existing_tables:
-    #         if table['name'] == dest_table['dest_table_name']:
-    #             syn.delete(table['id'])
-    #             print(f"Deleted existing table: {dest_table['dest_table_name']}")
-    #             break
-    # except Exception as e:
-    #     print(f"Error checking for existing table: {str(e)}")
+    # Check if table already exists and delete all rows if it does
+    try:
+        existing_tables = syn.getChildren(PROJECT_ID, includeTypes=['table'])
+        for table in existing_tables:
+            if table['name'] == dest_table['dest_table_name']:
+                # syn.delete(table['id']) I don't have permission to do this
+                existing_rows = syn.tableQuery(f"select * from {table['id']}")
+                print(f"Table {dest_table['dest_table_name']} already exists. Deleting {len(existing_rows)} rows.")
+                syn.delete(existing_rows)
+                break
+    except Exception as e:
+        print(f"Error checking for existing table: {str(e)}")
 
     # Create the table
+    all_data = all_data.reset_index(drop=True)  # otherwise get error: Cannot update row: 16745 because it does not exist.
     table = syn.store(Table(schema, all_data))
     print(f"Created table: {table.schema.name} ({table.tableId})")
 
