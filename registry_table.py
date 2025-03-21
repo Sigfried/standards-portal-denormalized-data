@@ -78,7 +78,6 @@ def denormalize_tables():
     for dest_table in DEST_TABLES.values():
         make_dest_table(syn, dest_table, src_tables)
 
-
 def make_dest_table(syn, dest_table, src_tables):
     # get base table columns
     src_tbl = dest_table['base_table']
@@ -121,21 +120,23 @@ def make_dest_table(syn, dest_table, src_tables):
                     join_columns.append(column_def)
 
     # Combine all columns (base + join) and create the destination table
-    # all_cols = [Column(**col['col']) for col in dest_cols + join_columns if 'col' in col]
-    # all_data = {col['alias']: col['data'] for col in dest_cols + join_columns if 'data' in col}
-    # without join_columns
-    all_cols = [Column(**col['col']) for col in dest_cols if 'col' in col]
-    all_data = {col['alias']: col['data'] for col in dest_cols if 'data' in col}
-
-    # Descriptions can get very long and I'm hitting the 64kb limit on column or row size
-    maxlen = 500
-    truncate_string = lambda x: x[:maxlen] + '...' if isinstance(x, str) and len(x) > maxlen else x
-    all_data['Description'] = [truncate_string(desc) for desc in list(all_data['Description'])]
-
-    del all_data['Description']
+    all_cols = [Column(**col['col']) for col in dest_cols + join_columns if 'col' in col]
+    all_data = {col['alias']: col['data'] for col in dest_cols + join_columns if 'data' in col}
     all_data = pd.DataFrame(all_data)
 
     # Create the table schema
+    for col in all_cols:
+        # Remove the column id so new column gets created
+        col.pop('id', None)
+        if col['columnType'] == 'STRING_LIST':
+            # Get the maximum number of items in the series of lists
+            max_items = max(len(items) for items in all_data[col['name']])
+            # Get the max string length in the all of the array of strings
+            max_item_length = max(len(item) for items in all_data[col['name']] for item in items)
+            col['maximumListLength'] = max_items + 2
+            col['maximumSize'] = max_item_length + 10
+            # The rationale for this is because if max size is set to 50 and max list length is 25, that is 50*25 bytes.
+            # even if you don't store that much data.
     schema = Schema(name=dest_table['dest_table_name'], columns=all_cols, parent=PROJECT_ID)
 
     # Check if table already exists and delete if it does
@@ -153,7 +154,6 @@ def make_dest_table(syn, dest_table, src_tables):
     # Create the table
     table = syn.store(Table(schema, all_data))
     print(f"Created table: {table.name} ({table.tableId})")
-
 
 def create_list_column(base_df, join_df, from_col, to_col, join_config, dest_col):
     """
