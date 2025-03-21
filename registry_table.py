@@ -25,14 +25,14 @@ SRC_TABLES = {
     # 'substr': { 'id': 'syn63096834', 'name': 'DataSubstrate', }
 }
 DEST_TABLES = {
-    'DST_denormalized': {
+    'DST_denormalized_2': {
         'dest_table_name': 'DST_denormalized',
         'base_table': 'dst',
         'columns': [
             # {'faceted': False, 'name': 'id',                        'alias': 'DST_ID'},
-            {'faceted': True,  'name': 'name',                      'alias': 'Acronym'},
-            {'faceted': True,  'name': 'description',               'alias': 'Name'},
-            {'faceted': True,  'name': 'category',                  'alias': 'Category'},
+            {'faceted': False, 'name': 'name',                      'alias': 'Acronym'},
+            {'faceted': False, 'name': 'description',               'alias': 'Name'},
+            {'faceted': False, 'name': 'category',                  'alias': 'Category'},
             {'faceted': False, 'name': 'purpose_detail',            'alias': 'Description'},
             {'faceted': False, 'name': 'collection',                'alias': 'Collections'},
             # {'faceted': False, 'name': 'concerns_data_topic',       'alias': 'Data_Topic_IDs'},
@@ -153,7 +153,7 @@ def make_dest_table(syn, dest_table, src_tables):
 
     # Create the table
     table = syn.store(Table(schema, all_data))
-    print(f"Created table: {table.name} ({table.tableId})")
+    print(f"Created table: {table.schema.name} ({table.tableId})")
 
 def create_list_column(base_df, join_df, from_col, to_col, join_config, dest_col):
     """
